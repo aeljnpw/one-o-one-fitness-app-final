@@ -17,7 +17,8 @@ A beautiful fitness tracking app inspired by Apple Fitness, built with React Nat
 - React Native Reanimated 3
 - React Native SVG
 - React Native Linear Gradient
-- React Native Vector Icons
+- Lucide React Native (Icons)
+- Supabase (Backend & Authentication)
 
 ## Getting Started
 
@@ -36,7 +37,17 @@ A beautiful fitness tracking app inspired by Apple Fitness, built with React Nat
    npm install
    ```
 
-3. For iOS, install CocoaPods dependencies:
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+   Then edit `.env` with your Supabase credentials:
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. For iOS, install CocoaPods dependencies:
    ```bash
    cd ios && pod install && cd ..
    ```
@@ -68,9 +79,33 @@ npm run build:ios
 ## Project Structure
 
 ```
-src/
-├── screens/          # Main app screens
-├── components/       # Reusable UI components
+OneOOneFitness/
+├── app/                # App screens (using Expo Router structure)
+│   ├── (tabs)/         # Tab navigation layout and screens
+│   │   ├── index.tsx   # Activity/Home screen
+│   │   ├── workouts.tsx # Workouts screen
+│   │   ├── trends.tsx  # Trends/Analytics screen
+│   │   └── profile.tsx # Profile screen
+│   ├── auth/           # Authentication screens
+│   │   ├── login.tsx   # Login screen
+│   │   └── signup.tsx  # Sign up screen
+│   └── _layout.tsx     # Root layout with auth protection
+├── components/         # Reusable UI components
+│   ├── ActivityCard.tsx
+│   ├── ActivityRings.tsx
+│   ├── EquipmentCard.tsx
+│   ├── ExerciseCard.tsx
+│   └── ...
+├── contexts/           # React contexts
+│   └── AuthContext.tsx # Authentication context
+├── hooks/              # Custom React hooks
+│   └── useFrameworkReady.ts
+├── lib/                # Libraries and clients
+│   └── supabase.ts     # Supabase client configuration
+├── types/              # TypeScript type definitions
+│   └── database.ts     # Database schema types
+├── android/            # Android-specific files
+├── ios/                # iOS-specific files
 └── ...
 ```
 
@@ -81,6 +116,16 @@ src/
 - Apple-inspired UI/UX patterns
 - Responsive design for all device sizes
 - Dark theme optimized for fitness tracking
+
+## Database Schema
+
+The app uses Supabase as the backend with the following main tables:
+- `profiles` - User profile information
+- `daily_activities` - Daily fitness tracking data
+- `exercises` - Exercise library
+- `equipment` - Gym equipment catalog
+- `workouts` - User workout sessions
+- `members` - Gym membership management
 
 ## License
 

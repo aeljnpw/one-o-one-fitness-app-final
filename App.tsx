@@ -2,7 +2,7 @@ import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {StatusBar, StyleSheet} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Home, Dumbbell, User, TrendingUp } from 'lucide-react-native';
 
 import ActivityScreen from './app/(tabs)/index';
 import WorkoutsScreen from './app/(tabs)/workouts';
@@ -23,19 +23,16 @@ function App(): JSX.Element {
           tabBarInactiveTintColor: '#8E8E93',
           tabBarLabelStyle: styles.tabBarLabel,
           tabBarIcon: ({focused, color, size}) => {
-            let iconName;
-
             if (route.name === 'Activity') {
-              iconName = 'timeline';
+              return <Home size={size} color={color} />;
             } else if (route.name === 'Workouts') {
-              iconName = 'fitness-center';
+              return <Dumbbell size={size} color={color} />;
             } else if (route.name === 'Trends') {
-              iconName = 'trending-up';
+              return <TrendingUp size={size} color={color} />;
             } else if (route.name === 'Profile') {
-              iconName = 'person';
+              return <User size={size} color={color} />;
             }
-
-            return <Icon name={iconName} size={size} color={color} />;
+            return null;
           },
         })}>
         <Tab.Screen name="Activity" component={ActivityScreen} />

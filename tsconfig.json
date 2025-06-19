@@ -3,11 +3,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./*"]
     }
   },
   "include": [
-    "src/**/*",
+    "**/*.ts",
+    "**/*.tsx",
     "App.tsx"
   ]
 }
