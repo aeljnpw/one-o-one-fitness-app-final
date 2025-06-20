@@ -9,11 +9,18 @@ import {
   TextInput,
   FlatList,
   Dimensions,
+  Modal,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, Wrench, Info } from 'lucide-react-native';
+import { Search, Filter, Wrench, Info, X, Dumbbell } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring 
+} from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +30,11 @@ export default function EquipmentScreen() {
   const [filteredEquipment, setFilteredEquipment] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedEquipment, setSelectedEquipment] = useState(null);
+  const [showEquipmentModal, setShowEquipmentModal] = useState(false);
+  const [relatedExercises, setRelatedExercises] = useState([]);
+
+  const modalScale = useSharedValue(0);
 
   const categories = ['All', 'Benches', 'Machines', 'No Equipment', 'Free Weights', 'Cardio'];
 
@@ -48,6 +60,22 @@ export default function EquipmentScreen() {
     }
   }
 
+  async function fetchRelatedExercises(equipmentName) {
+    try {
+      const { data, error } = await supabase
+        .from('exercises')
+        .select('*')
+        .ilike('equipment', `%${equipmentName}%`)
+        .limit(5);
+
+      if (error) throw error;
+      setRelatedExercises(data || []);
+    } catch (error) {
+      console.error('Error fetching related exercises:', error);
+      setRelatedExercises([]);
+    }
+  }
+
   function filterEquipment() {
     let filtered = equipment;
 
@@ -67,8 +95,26 @@ export default function EquipmentScreen() {
     setFilteredEquipment(filtered);
   }
 
+  function openEquipmentModal(item) {
+    setSelectedEquipment(item);
+    setShowEquipmentModal(true);
+    modalScale.value = withSpring(1);
+    fetchRelatedExercises(item.name);
+  }
+
+  function closeEquipmentModal() {
+    modalScale.value = withSpring(0, {}, () => {
+      setShowEquipmentModal(false);
+      setSelectedEquipment(null);
+      setRelatedExercises([]);
+    });
+  }
+
   const renderEquipmentCard = ({ item }) => (
-    <TouchableOpacity style={styles.equipmentCard}>
+    <TouchableOpacity 
+      style={styles.equipmentCard}
+      onPress={() => openEquipmentModal(item)}
+    >
       <LinearGradient
         colors={getCategoryColors(item.category)}
         style={styles.equipmentGradient}
@@ -86,7 +132,11 @@ export default function EquipmentScreen() {
         
         <View style={styles.equipmentContent}>
           <View style={styles.equipmentIcon}>
-            <Wrench size={32} color="#FFFFFF" />
+            {item.image_url ? (
+              <Image source={{ uri: item.image_url }} style={styles.equipmentImage} />
+            ) : (
+              <Wrench size={32} color="#FFFFFF" />
+            )}
           </View>
           <Text style={styles.equipmentName}>{item.name}</Text>
           <Text style={styles.equipmentDescription} numberOfLines={2}>
@@ -100,6 +150,13 @@ export default function EquipmentScreen() {
       </LinearGradient>
     </TouchableOpacity>
   );
+
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: modalScale.value }],
+      opacity: modalScale.value,
+    };
+  });
 
   function getCategoryColors(category) {
     switch (category) {
@@ -180,6 +237,54 @@ export default function EquipmentScreen() {
           contentContainerStyle={styles.equipmentList}
           showsVerticalScrollIndicator={false}
         />
+
+        <Modal
+          visible={showEquipmentModal}
+          transparent
+          animationType="fade"
+          onRequestClose={closeEquipmentModal}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View style={[styles.modalContent, modalAnimatedStyle]}>
+              {selectedEquipment && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{selectedEquipment.name}</Text>
+                    <TouchableOpacity onPress={closeEquipmentModal}>
+                      <X size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <ScrollView style={styles.modalBody}>
+                    <Text style={styles.modalCategory}>{selectedEquipment.category}</Text>
+                    <Text style={styles.modalDescription}>{selectedEquipment.description}</Text>
+                    
+                    <View style={styles.safetyTipsContainer}>
+                      <Text style={styles.sectionTitle}>Safety Tips:</Text>
+                      <Text style={styles.safetyTip}>• Always warm up before using equipment</Text>
+                      <Text style={styles.safetyTip}>• Check equipment for damage before use</Text>
+                      <Text style={styles.safetyTip}>• Use proper form to prevent injury</Text>
+                      <Text style={styles.safetyTip}>• Start with lighter weights and progress gradually</Text>
+                    </View>
+
+                    {relatedExercises.length > 0 && (
+                      <View style={styles.relatedExercisesContainer}>
+                        <Text style={styles.sectionTitle}>Related Exercises:</Text>
+                        {relatedExercises.map((exercise, index) => (
+                          <View key={index} style={styles.exerciseItem}>
+                            <Dumbbell size={16} color="#FF6B35" />
+                            <Text style={styles.exerciseName}>{exercise.name}</Text>
+                            <Text style={styles.exerciseDifficulty}>{exercise.difficulty}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </ScrollView>
+                </>
+              )}
+            </Animated.View>
+          </View>
+        </Modal>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -312,6 +417,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  equipmentImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
   },
   equipmentName: {
     fontSize: 16,
@@ -339,5 +450,88 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3A',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  modalBody: {
+    padding: 24,
+    maxHeight: 400,
+  },
+  modalCategory: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#FF6B35',
+    marginBottom: 8,
+  },
+  modalDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  safetyTipsContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  safetyTip: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF80',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  relatedExercisesContainer: {
+    marginBottom: 24,
+  },
+  exerciseItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A3A3A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  exerciseName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    flex: 1,
+    marginLeft: 12,
+  },
+  exerciseDifficulty: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF60',
   },
 });

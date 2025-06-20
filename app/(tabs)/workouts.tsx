@@ -9,11 +9,20 @@ import {
   TextInput,
   FlatList,
   Dimensions,
+  Modal,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, Play, Clock, Target, Zap } from 'lucide-react-native';
+import { Search, Filter, Play, Clock, Target, Zap, X, CheckCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring,
+  withTiming,
+  interpolate
+} from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -23,8 +32,14 @@ export default function WorkoutsScreen() {
   const [filteredExercises, setFilteredExercises] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const [selectedExercise, setSelectedExercise] = useState(null);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [dailyProgress, setDailyProgress] = useState({ completed: 0, goal: 3 });
   const [streak, setStreak] = useState(0);
+  const [completedExercises, setCompletedExercises] = useState(new Set());
+
+  const modalScale = useSharedValue(0);
+  const progressAnimation = useSharedValue(0);
 
   const filters = ['All', 'Beginner', 'Intermediate', 'Advanced'];
   const muscleGroups = ['All', 'Chest', 'Back', 'Legs', 'Arms', 'Core', 'Shoulders'];
@@ -40,6 +55,12 @@ export default function WorkoutsScreen() {
   useEffect(() => {
     filterExercises();
   }, [exercises, searchQuery, selectedFilter]);
+
+  useEffect(() => {
+    progressAnimation.value = withTiming(dailyProgress.completed / dailyProgress.goal, {
+      duration: 1000,
+    });
+  }, [dailyProgress]);
 
   async function fetchExercises() {
     try {
@@ -75,7 +96,6 @@ export default function WorkoutsScreen() {
   }
 
   async function fetchStreak() {
-    // Implementation for streak calculation
     setStreak(5); // Placeholder
   }
 
@@ -98,41 +118,109 @@ export default function WorkoutsScreen() {
     setFilteredExercises(filtered);
   }
 
-  const renderExerciseCard = ({ item }) => (
-    <TouchableOpacity style={styles.exerciseCard}>
-      <LinearGradient
-        colors={getDifficultyColors(item.difficulty)}
-        style={styles.exerciseGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+  function openExerciseModal(exercise) {
+    setSelectedExercise(exercise);
+    setShowExerciseModal(true);
+    modalScale.value = withSpring(1);
+  }
+
+  function closeExerciseModal() {
+    modalScale.value = withSpring(0, {}, () => {
+      setShowExerciseModal(false);
+      setSelectedExercise(null);
+    });
+  }
+
+  async function startWorkout(exercise) {
+    try {
+      // Mark exercise as completed
+      setCompletedExercises(prev => new Set([...prev, exercise.id]));
+      
+      // Update daily progress
+      const newCompleted = dailyProgress.completed + 1;
+      setDailyProgress(prev => ({ ...prev, completed: newCompleted }));
+
+      // Update database
+      const today = new Date().toISOString().split('T')[0];
+      const { error } = await supabase
+        .from('daily_activities')
+        .upsert({
+          user_id: user.id,
+          date: today,
+          exercise_minutes: newCompleted * 10,
+          calories_burned: newCompleted * 50,
+        });
+
+      if (error) throw error;
+
+      Alert.alert('Great Job!', `You completed ${exercise.name}! Keep it up!`);
+      closeExerciseModal();
+    } catch (error) {
+      console.error('Error updating workout:', error);
+      Alert.alert('Error', 'Failed to record workout. Please try again.');
+    }
+  }
+
+  const renderExerciseCard = ({ item }) => {
+    const isCompleted = completedExercises.has(item.id);
+    
+    return (
+      <TouchableOpacity 
+        style={styles.exerciseCard} 
+        onPress={() => openExerciseModal(item)}
       >
-        <View style={styles.exerciseHeader}>
-          <View style={styles.difficultyBadge}>
-            <Text style={styles.difficultyText}>{item.difficulty}</Text>
+        <LinearGradient
+          colors={getDifficultyColors(item.difficulty)}
+          style={styles.exerciseGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.exerciseHeader}>
+            <View style={styles.difficultyBadge}>
+              <Text style={styles.difficultyText}>{item.difficulty}</Text>
+            </View>
+            {isCompleted ? (
+              <CheckCircle size={20} color="#4ECDC4" />
+            ) : (
+              <TouchableOpacity style={styles.playButton}>
+                <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+              </TouchableOpacity>
+            )}
           </View>
-          <TouchableOpacity style={styles.playButton}>
-            <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.exerciseContent}>
-          <Text style={styles.exerciseName}>{item.name}</Text>
-          <Text style={styles.muscleGroup}>{item.muscle_group}</Text>
           
-          <View style={styles.exerciseStats}>
-            <View style={styles.statItem}>
-              <Clock size={14} color="#FFFFFF80" />
-              <Text style={styles.statText}>{item.duration || '15 min'}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Target size={14} color="#FFFFFF80" />
-              <Text style={styles.statText}>{item.equipment || 'No Equipment'}</Text>
+          <View style={styles.exerciseContent}>
+            <Text style={styles.exerciseName}>{item.name}</Text>
+            <Text style={styles.muscleGroup}>{item.muscle_group}</Text>
+            
+            <View style={styles.exerciseStats}>
+              <View style={styles.statItem}>
+                <Clock size={14} color="#FFFFFF80" />
+                <Text style={styles.statText}>{item.duration || '15 min'}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Target size={14} color="#FFFFFF80" />
+                <Text style={styles.statText}>{item.equipment || 'No Equipment'}</Text>
+              </View>
             </View>
           </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  const progressAnimatedStyle = useAnimatedStyle(() => {
+    const width = interpolate(progressAnimation.value, [0, 1], [0, 100]);
+    return {
+      width: `${Math.min(width, 100)}%`,
+    };
+  });
+
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: modalScale.value }],
+      opacity: modalScale.value,
+    };
+  });
 
   function getDifficultyColors(difficulty) {
     switch (difficulty) {
@@ -169,6 +257,9 @@ export default function WorkoutsScreen() {
               <Zap size={24} color="#FFFFFF" />
               <Text style={styles.statValue}>{dailyProgress.completed}/{dailyProgress.goal}</Text>
               <Text style={styles.statLabel}>Today's Goal</Text>
+              <View style={styles.progressBar}>
+                <Animated.View style={[styles.progressFill, progressAnimatedStyle]} />
+              </View>
             </LinearGradient>
           </View>
 
@@ -233,6 +324,57 @@ export default function WorkoutsScreen() {
           contentContainerStyle={styles.exercisesList}
           showsVerticalScrollIndicator={false}
         />
+
+        <Modal
+          visible={showExerciseModal}
+          transparent
+          animationType="fade"
+          onRequestClose={closeExerciseModal}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View style={[styles.modalContent, modalAnimatedStyle]}>
+              {selectedExercise && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{selectedExercise.name}</Text>
+                    <TouchableOpacity onPress={closeExerciseModal}>
+                      <X size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.modalBody}>
+                    <Text style={styles.modalMuscleGroup}>{selectedExercise.muscle_group}</Text>
+                    <Text style={styles.modalDifficulty}>{selectedExercise.difficulty}</Text>
+                    
+                    {selectedExercise.instructions && (
+                      <View style={styles.instructionsContainer}>
+                        <Text style={styles.instructionsTitle}>Instructions:</Text>
+                        {selectedExercise.instructions.map((instruction, index) => (
+                          <Text key={index} style={styles.instructionText}>
+                            {index + 1}. {instruction}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    
+                    <TouchableOpacity
+                      style={styles.startWorkoutButton}
+                      onPress={() => startWorkout(selectedExercise)}
+                    >
+                      <LinearGradient
+                        colors={['#FF6B35', '#F7931E']}
+                        style={styles.startWorkoutGradient}
+                      >
+                        <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
+                        <Text style={styles.startWorkoutText}>Start Workout</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </Animated.View>
+          </View>
+        </Modal>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -293,6 +435,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#FFFFFF80',
     marginTop: 4,
+  },
+  progressBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#FFFFFF20',
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
   },
   searchContainer: {
     paddingHorizontal: 24,
@@ -407,5 +562,79 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Inter-Medium',
     color: '#FFFFFF80',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3A',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  modalBody: {
+    padding: 24,
+  },
+  modalMuscleGroup: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#FF6B35',
+    marginBottom: 8,
+  },
+  modalDifficulty: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF80',
+    marginBottom: 24,
+  },
+  instructionsContainer: {
+    marginBottom: 32,
+  },
+  instructionsTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  instructionText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  startWorkoutButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  startWorkoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 12,
+  },
+  startWorkoutText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
   },
 });

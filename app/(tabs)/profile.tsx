@@ -8,11 +8,18 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CreditCard as Edit3, Camera, Trophy, Target, Zap, Calendar } from 'lucide-react-native';
+import { Edit3, Camera, Trophy, Target, Zap, Calendar, X, Save } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring 
+} from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +33,15 @@ export default function ProfileScreen() {
     longestStreak: 0,
     memberSince: '',
   });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editedProfile, setEditedProfile] = useState({});
+  const [personalRecords, setPersonalRecords] = useState([
+    { exercise: 'Push-ups', record: '50 reps', date: '2 days ago' },
+    { exercise: 'Plank', record: '2:30 min', date: '1 week ago' },
+    { exercise: 'Squats', record: '100 reps', date: '3 days ago' },
+  ]);
+
+  const modalScale = useSharedValue(0);
 
   useEffect(() => {
     if (user) {
@@ -44,6 +60,7 @@ export default function ProfileScreen() {
 
       if (error) throw error;
       setProfile(data);
+      setEditedProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -77,6 +94,43 @@ export default function ProfileScreen() {
     }
   }
 
+  function openEditModal() {
+    setShowEditModal(true);
+    modalScale.value = withSpring(1);
+  }
+
+  function closeEditModal() {
+    modalScale.value = withSpring(0, {}, () => {
+      setShowEditModal(false);
+      setEditedProfile(profile);
+    });
+  }
+
+  async function saveProfile() {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(editedProfile)
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile(editedProfile);
+      closeEditModal();
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
+  }
+
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: modalScale.value }],
+      opacity: modalScale.value,
+    };
+  });
+
   if (!profile) {
     return (
       <SafeAreaView style={styles.container}>
@@ -96,7 +150,7 @@ export default function ProfileScreen() {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Text style={styles.title}>Profile</Text>
-            <TouchableOpacity style={styles.editButton}>
+            <TouchableOpacity style={styles.editButton} onPress={openEditModal}>
               <Edit3 size={24} color="#FF6B35" />
             </TouchableOpacity>
           </View>
@@ -189,23 +243,49 @@ export default function ProfileScreen() {
               <View style={styles.infoDivider} />
               
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Fitness Goal</Text>
-                <Text style={styles.infoValue}>Weight Loss</Text>
+                <Text style={styles.infoLabel}>Age</Text>
+                <Text style={styles.infoValue}>{profile.age || 'Not set'}</Text>
               </View>
               
+              <View style={styles.infoDivider} />
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Height</Text>
+                <Text style={styles.infoValue}>{profile.height ? `${profile.height} cm` : 'Not set'}</Text>
+              </View>
+              
+              <View style={styles.infoDivider} />
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Weight</Text>
+                <Text style={styles.infoValue}>{profile.weight ? `${profile.weight} kg` : 'Not set'}</Text>
+              </View>
+
               <View style={styles.infoDivider} />
               
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Fitness Level</Text>
-                <Text style={styles.infoValue}>Intermediate</Text>
+                <Text style={styles.infoValue}>{profile.fitness_level || 'Not set'}</Text>
               </View>
-              
-              <View style={styles.infoDivider} />
-              
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Weekly Goal</Text>
-                <Text style={styles.infoValue}>4 workouts</Text>
-              </View>
+            </View>
+          </View>
+
+          <View style={styles.personalRecordsSection}>
+            <Text style={styles.sectionTitle}>Personal Records</Text>
+            
+            <View style={styles.recordsList}>
+              {personalRecords.map((record, index) => (
+                <View key={index} style={styles.recordItem}>
+                  <View style={styles.recordIcon}>
+                    <Text style={styles.recordEmoji}>🏆</Text>
+                  </View>
+                  <View style={styles.recordContent}>
+                    <Text style={styles.recordExercise}>{record.exercise}</Text>
+                    <Text style={styles.recordValue}>{record.record}</Text>
+                  </View>
+                  <Text style={styles.recordDate}>{record.date}</Text>
+                </View>
+              ))}
             </View>
           </View>
 
@@ -245,6 +325,98 @@ export default function ProfileScreen() {
             </View>
           </View>
         </ScrollView>
+
+        <Modal
+          visible={showEditModal}
+          transparent
+          animationType="fade"
+          onRequestClose={closeEditModal}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View style={[styles.modalContent, modalAnimatedStyle]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Profile</Text>
+                <TouchableOpacity onPress={closeEditModal}>
+                  <X size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editedProfile.name || ''}
+                    onChangeText={(text) => setEditedProfile(prev => ({ ...prev, name: text }))}
+                    placeholder="Enter your name"
+                    placeholderTextColor="#666"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Bio</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={editedProfile.bio || ''}
+                    onChangeText={(text) => setEditedProfile(prev => ({ ...prev, bio: text }))}
+                    placeholder="Tell us about yourself"
+                    placeholderTextColor="#666"
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+
+                <View style={styles.inputRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Age</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editedProfile.age?.toString() || ''}
+                      onChangeText={(text) => setEditedProfile(prev => ({ ...prev, age: parseInt(text) || null }))}
+                      placeholder="25"
+                      placeholderTextColor="#666"
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Height (cm)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editedProfile.height?.toString() || ''}
+                      onChangeText={(text) => setEditedProfile(prev => ({ ...prev, height: parseInt(text) || null }))}
+                      placeholder="170"
+                      placeholderTextColor="#666"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editedProfile.weight?.toString() || ''}
+                    onChangeText={(text) => setEditedProfile(prev => ({ ...prev, weight: parseInt(text) || null }))}
+                    placeholder="70"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <TouchableOpacity style={styles.saveButton} onPress={saveProfile}>
+                  <LinearGradient
+                    colors={['#FF6B35', '#F7931E']}
+                    style={styles.saveGradient}
+                  >
+                    <Save size={20} color="#FFFFFF" />
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </ScrollView>
+            </Animated.View>
+          </View>
+        </Modal>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -413,6 +585,51 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#3A3A3A',
   },
+  personalRecordsSection: {
+    paddingHorizontal: 24,
+    marginBottom: 32,
+  },
+  recordsList: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 20,
+    padding: 20,
+  },
+  recordItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  recordIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#3A3A3A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  recordEmoji: {
+    fontSize: 20,
+  },
+  recordContent: {
+    flex: 1,
+  },
+  recordExercise: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  recordValue: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#FF6B35',
+  },
+  recordDate: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF60',
+  },
   achievementsSection: {
     paddingHorizontal: 24,
     marginBottom: 100,
@@ -452,5 +669,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF60',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3A',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  modalBody: {
+    padding: 24,
+    maxHeight: 400,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#3A3A3A',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  saveButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 20,
+  },
+  saveGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 12,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
   },
 });

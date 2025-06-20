@@ -7,11 +7,20 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Dimensions,
+  Modal,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Calendar, Trophy, TrendingUp, Camera, Target, Zap, Award } from 'lucide-react-native';
+import { Calendar, Trophy, TrendingUp, Camera, Target, Zap, Award, X, Plus } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring,
+  withTiming,
+  interpolate
+} from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -25,13 +34,28 @@ export default function ProgressScreen() {
     longestStreak: 0,
   });
   const [achievements, setAchievements] = useState([]);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState(null);
+  const [bodyMeasurements, setBodyMeasurements] = useState({
+    weight: 70,
+    bodyFat: 15,
+    muscle: 45,
+  });
+
+  const modalScale = useSharedValue(0);
+  const chartAnimations = useSharedValue(0);
 
   useEffect(() => {
     if (user) {
       fetchProgressData();
       fetchAchievements();
+      animateCharts();
     }
   }, [user]);
+
+  function animateCharts() {
+    chartAnimations.value = withTiming(1, { duration: 1500 });
+  }
 
   async function fetchProgressData() {
     try {
@@ -47,11 +71,19 @@ export default function ProgressScreen() {
 
       if (error) throw error;
 
-      const weeklyStats = activities.map(activity => ({
-        day: new Date(activity.date).toLocaleDateString('en-US', { weekday: 'short' }),
-        calories: activity.calories_burned || 0,
-        exercises: Math.floor((activity.exercise_minutes || 0) / 10),
-      }));
+      const weeklyStats = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const activity = activities.find(a => a.date === dateStr);
+        weeklyStats.push({
+          day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          calories: activity?.calories_burned || 0,
+          exercises: Math.floor((activity?.exercise_minutes || 0) / 10),
+        });
+      }
 
       setWeeklyData(weeklyStats);
 
@@ -71,15 +103,73 @@ export default function ProgressScreen() {
   }
 
   async function fetchAchievements() {
-    // Mock achievements data
+    // Mock achievements data with more detailed information
     setAchievements([
-      { id: 1, title: 'First Workout', description: 'Complete your first workout', unlocked: true, icon: '🎯' },
-      { id: 2, title: '7 Day Streak', description: 'Workout for 7 consecutive days', unlocked: true, icon: '🔥' },
-      { id: 3, title: '100 Calories', description: 'Burn 100 calories in a single workout', unlocked: true, icon: '💪' },
-      { id: 4, title: 'Early Bird', description: 'Complete a workout before 8 AM', unlocked: false, icon: '🌅' },
-      { id: 5, title: 'Consistency King', description: 'Workout 30 days in a row', unlocked: false, icon: '👑' },
-      { id: 6, title: 'Calorie Crusher', description: 'Burn 1000 calories in a week', unlocked: false, icon: '🚀' },
+      { 
+        id: 1, 
+        title: 'First Workout', 
+        description: 'Complete your first workout session', 
+        unlocked: true, 
+        icon: '🎯',
+        unlockedDate: '2 days ago',
+        points: 50
+      },
+      { 
+        id: 2, 
+        title: '7 Day Streak', 
+        description: 'Workout for 7 consecutive days', 
+        unlocked: true, 
+        icon: '🔥',
+        unlockedDate: '1 day ago',
+        points: 100
+      },
+      { 
+        id: 3, 
+        title: '100 Calories', 
+        description: 'Burn 100 calories in a single workout', 
+        unlocked: true, 
+        icon: '💪',
+        unlockedDate: 'Today',
+        points: 75
+      },
+      { 
+        id: 4, 
+        title: 'Early Bird', 
+        description: 'Complete a workout before 8 AM', 
+        unlocked: false, 
+        icon: '🌅',
+        points: 80
+      },
+      { 
+        id: 5, 
+        title: 'Consistency King', 
+        description: 'Workout 30 days in a row', 
+        unlocked: false, 
+        icon: '👑',
+        points: 200
+      },
+      { 
+        id: 6, 
+        title: 'Calorie Crusher', 
+        description: 'Burn 1000 calories in a week', 
+        unlocked: false, 
+        icon: '🚀',
+        points: 150
+      },
     ]);
+  }
+
+  function openAchievementModal(achievement) {
+    setSelectedAchievement(achievement);
+    setShowAchievementModal(true);
+    modalScale.value = withSpring(1);
+  }
+
+  function closeAchievementModal() {
+    modalScale.value = withSpring(0, {}, () => {
+      setShowAchievementModal(false);
+      setSelectedAchievement(null);
+    });
   }
 
   const renderWeeklyChart = () => {
@@ -89,23 +179,36 @@ export default function ProgressScreen() {
       <View style={styles.chartContainer}>
         <Text style={styles.chartTitle}>This Week's Progress</Text>
         <View style={styles.chart}>
-          {weeklyData.map((day, index) => (
-            <View key={index} style={styles.chartDay}>
-              <View style={styles.chartBar}>
-                <View
-                  style={[
-                    styles.chartBarFill,
-                    {
-                      height: `${(day.calories / maxCalories) * 100}%`,
-                      backgroundColor: day.calories > 0 ? '#FF6B35' : '#2A2A2A',
-                    },
-                  ]}
-                />
+          {weeklyData.map((day, index) => {
+            const animatedStyle = useAnimatedStyle(() => {
+              const height = interpolate(
+                chartAnimations.value,
+                [0, 1],
+                [0, (day.calories / maxCalories) * 100]
+              );
+              return {
+                height: `${Math.max(height, 4)}%`,
+              };
+            });
+
+            return (
+              <View key={index} style={styles.chartDay}>
+                <View style={styles.chartBar}>
+                  <Animated.View
+                    style={[
+                      styles.chartBarFill,
+                      {
+                        backgroundColor: day.calories > 0 ? '#FF6B35' : '#2A2A2A',
+                      },
+                      animatedStyle,
+                    ]}
+                  />
+                </View>
+                <Text style={styles.chartDayLabel}>{day.day}</Text>
+                <Text style={styles.chartDayValue}>{day.calories}</Text>
               </View>
-              <Text style={styles.chartDayLabel}>{day.day}</Text>
-              <Text style={styles.chartDayValue}>{day.calories}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </View>
     );
@@ -118,6 +221,7 @@ export default function ProgressScreen() {
         styles.achievementCard,
         !achievement.unlocked && styles.achievementCardLocked,
       ]}
+      onPress={() => openAchievementModal(achievement)}
     >
       <LinearGradient
         colors={achievement.unlocked ? ['#FF6B35', '#F7931E'] : ['#2A2A2A', '#3A3A3A']}
@@ -141,9 +245,19 @@ export default function ProgressScreen() {
             <Award size={12} color="#FFFFFF" />
           </View>
         )}
+        <View style={styles.pointsBadge}>
+          <Text style={styles.pointsText}>{achievement.points}pts</Text>
+        </View>
       </LinearGradient>
     </TouchableOpacity>
   );
+
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: modalScale.value }],
+      opacity: modalScale.value,
+    };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -210,6 +324,33 @@ export default function ProgressScreen() {
 
           {renderWeeklyChart()}
 
+          <View style={styles.bodyMeasurementsContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Body Measurements</Text>
+              <TouchableOpacity style={styles.addButton}>
+                <Plus size={20} color="#FF6B35" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.measurementsGrid}>
+              <View style={styles.measurementCard}>
+                <Text style={styles.measurementValue}>{bodyMeasurements.weight}kg</Text>
+                <Text style={styles.measurementLabel}>Weight</Text>
+                <Text style={styles.measurementChange}>-2kg this month</Text>
+              </View>
+              <View style={styles.measurementCard}>
+                <Text style={styles.measurementValue}>{bodyMeasurements.bodyFat}%</Text>
+                <Text style={styles.measurementLabel}>Body Fat</Text>
+                <Text style={styles.measurementChange}>-1% this month</Text>
+              </View>
+              <View style={styles.measurementCard}>
+                <Text style={styles.measurementValue}>{bodyMeasurements.muscle}kg</Text>
+                <Text style={styles.measurementLabel}>Muscle</Text>
+                <Text style={styles.measurementChange}>+1kg this month</Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.achievementsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Achievements</Text>
@@ -237,6 +378,45 @@ export default function ProgressScreen() {
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
+
+        <Modal
+          visible={showAchievementModal}
+          transparent
+          animationType="fade"
+          onRequestClose={closeAchievementModal}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View style={[styles.modalContent, modalAnimatedStyle]}>
+              {selectedAchievement && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{selectedAchievement.title}</Text>
+                    <TouchableOpacity onPress={closeAchievementModal}>
+                      <X size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.modalBody}>
+                    <Text style={styles.modalIcon}>{selectedAchievement.icon}</Text>
+                    <Text style={styles.modalDescription}>{selectedAchievement.description}</Text>
+                    <Text style={styles.modalPoints}>{selectedAchievement.points} Points</Text>
+                    
+                    {selectedAchievement.unlocked ? (
+                      <View style={styles.unlockedContainer}>
+                        <Text style={styles.unlockedText}>Unlocked {selectedAchievement.unlockedDate}</Text>
+                        <TouchableOpacity style={styles.shareButton}>
+                          <Text style={styles.shareButtonText}>Share Achievement</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={styles.lockedText}>Keep working to unlock this achievement!</Text>
+                    )}
+                  </View>
+                </>
+              )}
+            </Animated.View>
+          </View>
+        </Modal>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -396,20 +576,59 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#FF6B35',
   },
-  achievementsSection: {
+  bodyMeasurementsContainer: {
+    paddingHorizontal: 24,
     marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
+  },
+  addButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  measurementsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  measurementCard: {
+    flex: 1,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  measurementValue: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  measurementLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF80',
+    marginBottom: 8,
+  },
+  measurementChange: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#4ECDC4',
+  },
+  achievementsSection: {
+    marginBottom: 24,
   },
   seeAllText: {
     fontSize: 14,
@@ -431,7 +650,7 @@ const styles = StyleSheet.create({
   achievementGradient: {
     padding: 16,
     alignItems: 'center',
-    minHeight: 120,
+    minHeight: 140,
     position: 'relative',
   },
   achievementIcon: {
@@ -454,6 +673,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF80',
     textAlign: 'center',
     lineHeight: 14,
+    marginBottom: 8,
   },
   achievementDescriptionLocked: {
     color: '#FFFFFF40',
@@ -468,6 +688,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#4ECDC4',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pointsBadge: {
+    backgroundColor: '#FFFFFF20',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pointsText: {
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
   },
   photoButton: {
     marginHorizontal: 24,
@@ -486,5 +717,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3A',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  modalBody: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  modalDescription: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  modalPoints: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#FF6B35',
+    marginBottom: 24,
+  },
+  unlockedContainer: {
+    alignItems: 'center',
+  },
+  unlockedText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#4ECDC4',
+    marginBottom: 16,
+  },
+  shareButton: {
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+  },
+  lockedText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF80',
+    textAlign: 'center',
   },
 });
