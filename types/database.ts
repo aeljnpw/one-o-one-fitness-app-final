@@ -58,6 +58,18 @@ export interface Profile {
   longest_streak?: number;
   email?: string;
   updated_at: string;
+  // Survey data
+  fitness_goals?: string[];
+  fitness_level?: string;
+  workout_frequency?: number;
+  preferred_workout_types?: string[];
+  limitations?: string[];
+  target_areas?: string[];
+  equipment_access?: string[];
+  age?: number;
+  height?: number;
+  weight?: number;
+  gender?: string;
 }
 
 export interface User {
@@ -106,4 +118,22 @@ export interface Membership {
   duration_months: number;
   description?: string;
   created_at: string;
+}
+
+export interface SurveyData {
+  fitness_goals: string[];
+  fitness_level: string;
+  workout_frequency: number;
+  preferred_workout_types: string[];
+  limitations: string[];
+  target_areas: string[];
+  equipment_access: string[];
+  personal_info: {
+    firstName: string;
+    lastName: string;
+    age: number;
+    height: number;
+    weight: number;
+    gender: string;
+  };
 }

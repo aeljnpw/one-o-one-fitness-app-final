@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
-import { Home, Dumbbell, User, TrendingUp } from 'lucide-react-native';
+import { Dumbbell, Settings, User, TrendingUp, Wrench } from 'lucide-react-native';
 
 export default function TabsLayout() {
   const { session } = useAuth();
@@ -20,20 +20,20 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#1C1C1E',
-          borderTopColor: '#2C2C2E',
+          backgroundColor: '#1A1A1A',
+          borderTopColor: '#2A2A2A',
+          height: 85,
+          paddingBottom: 25,
+          paddingTop: 10,
         },
-        tabBarActiveTintColor: '#FF6B6B',
+        tabBarActiveTintColor: '#FF6B35',
         tabBarInactiveTintColor: '#8E8E93',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontFamily: 'Inter-Medium',
+        },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Activity',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="workouts"
         options={{
@@ -42,9 +42,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="trends"
+        name="equipment"
         options={{
-          title: 'Trends',
+          title: 'Equipment',
+          tabBarIcon: ({ color, size }) => <Wrench size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: 'Progress',
           tabBarIcon: ({ color, size }) => <TrendingUp size={size} color={color} />,
         }}
       />
@@ -53,6 +60,13 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
         }}
       />
     </Tabs>

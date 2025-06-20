@@ -9,18 +9,22 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Mail, Lock, ArrowRight } from 'lucide-react-native';
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const { loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -30,7 +34,6 @@ export default function LoginScreen() {
   async function handleLogin() {
     if (loading || authLoading) return;
 
-    // Validate inputs
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
@@ -66,8 +69,6 @@ export default function LoginScreen() {
         }
         return;
       }
-
-      // Auth state change will handle navigation
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
@@ -75,53 +76,30 @@ export default function LoginScreen() {
     }
   }
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      
-      Alert.alert(
-        'Password Reset Email Sent',
-        'Please check your email for instructions to reset your password.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <LinearGradient
-        colors={['#1C1C1E', '#2C2C2E']}
+        colors={['#FF6B35', '#F7931E', '#FFD23F']}
         style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue your fitness journey</Text>
+            <Text style={styles.title}>Welcome Back!</Text>
+            <Text style={styles.subtitle}>Ready to crush your fitness goals?</Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <Mail size={20} color="#8E8E93" style={styles.inputIcon} />
+              <Mail size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Email"
-                placeholderTextColor="#8E8E93"
+                placeholderTextColor="#999"
                 autoCapitalize="none"
                 keyboardType="email-address"
                 value={email}
@@ -131,39 +109,62 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Lock size={20} color="#8E8E93" style={styles.inputIcon} />
+              <Lock size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Password"
-                placeholderTextColor="#8E8E93"
-                secureTextEntry
+                placeholderTextColor="#999"
+                secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
                 editable={!loading && !authLoading}
               />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color="#666" />
+                ) : (
+                  <Eye size={20} color="#666" />
+                )}
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={handleForgotPassword}
-              disabled={loading || authLoading}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, (loading || authLoading) && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={loading || authLoading}
             >
-              {loading || authLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>Sign In</Text>
-                  <ArrowRight size={20} color="#FFFFFF" />
-                </>
-              )}
+              <LinearGradient
+                colors={['#1A1A1A', '#2A2A2A']}
+                style={styles.buttonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {loading || authLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.buttonText}>Sign In</Text>
+                    <ArrowRight size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity style={styles.socialButton}>
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.socialButton}>
+              <Text style={styles.socialButtonText}>Continue with Apple</Text>
             </TouchableOpacity>
           </View>
 
@@ -184,7 +185,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1C1C1E',
   },
   gradient: {
     flex: 1,
@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
+    alignItems: 'center',
     marginBottom: 48,
   },
   title: {
@@ -202,49 +203,61 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#8E8E93',
+    color: '#FFFFFF90',
+    textAlign: 'center',
   },
-  form: {
-    gap: 16,
+  formContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
     paddingHorizontal: 16,
     height: 56,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginTop: -8,
-  },
-  forgotPasswordText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+  eyeIcon: {
+    padding: 4,
   },
   button: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FF6B6B',
-    borderRadius: 12,
     height: 56,
-    marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -255,21 +268,51 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     marginRight: 8,
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E9ECEF',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#666',
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+  },
+  socialButton: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  socialButtonText: {
+    color: '#1A1A1A',
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 32,
   },
   footerText: {
-    color: '#8E8E93',
+    color: '#FFFFFF90',
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     marginRight: 4,
   },
   footerLink: {
-    color: '#FF6B6B',
+    color: '#FFFFFF',
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
   },
-}); 
+});
