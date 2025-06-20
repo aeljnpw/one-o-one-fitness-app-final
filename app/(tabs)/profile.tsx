@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Edit3, Camera, Trophy, Target, Zap, Calendar } from 'lucide-react-native';
+import { CreditCard as Edit3, Camera, Trophy, Target, Zap, Calendar } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
